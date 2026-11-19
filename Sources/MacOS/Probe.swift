@@ -28,14 +28,9 @@ final class CGSProbe: SpaceProbe {
 
   func read() throws -> Reading {
     let spaces = try readSpaces()
-    guard
-      let list = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID)
-        as? [[String: Any]]
-    else { throw ProbeError() }
+    guard let list = windowList() else { throw ProbeError() }
     var windows: [CodeWindow] = []
-    for entry in list
-    where (entry[kCGWindowOwnerName as String] as? String) == Self.owner
-      && (entry[kCGWindowLayer as String] as? Int) == 0 {
+    for entry in codeEntries(list) {
       guard let id = entry[kCGWindowNumber as String] as? Int else { throw ProbeError() }
       let title = entry[kCGWindowName as String] as? String ?? ""
       windows.append(CodeWindow(id: id, title: title, spaces: spacesOf(id)))
@@ -43,8 +38,30 @@ final class CGSProbe: SpaceProbe {
     return Reading(spaces: spaces, windows: windows)
   }
 
+  /// One lookup of the recognised window; a failing system call is reported in the result, never thrown.
+  func lookup(window: Int) -> (spaces: Spaces?, window: WindowLookup) {
+    let spaces = try? readSpaces()
+    guard let list = windowList() else {
+      return (spaces, WindowLookup(listReadOK: false, listCount: 0, windowSpaces: nil))
+    }
+    let found = codeEntries(list).contains { ($0[kCGWindowNumber as String] as? Int) == window }
+    return (
+      spaces,
+      WindowLookup(listReadOK: true, listCount: list.count, windowSpaces: found ? spacesOf(window) : nil))
+  }
+
   func reread(window: Int) throws -> Rereading {
     Rereading(spaces: try readSpaces(), windowSpaces: spacesOf(window))
+  }
+
+  private func windowList() -> [[String: Any]]? {
+    CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
+  }
+
+  private func codeEntries(_ list: [[String: Any]]) -> [[String: Any]] {
+    list.filter {
+      ($0[kCGWindowOwnerName as String] as? String) == Self.owner && ($0[kCGWindowLayer as String] as? Int) == 0
+    }
   }
 
   private func readSpaces() throws -> Spaces {

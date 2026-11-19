@@ -41,8 +41,16 @@ private let breathMinOpacity: Float = 0.74
 private let breathHalfPeriodSeconds: TimeInterval = 1.6
 private let breathStartDelaySeconds: TimeInterval = enterSeconds
 private let reducedFadeSeconds: TimeInterval = 0.25
-private let lifetimeSeconds: TimeInterval = 10
 private let sampleIntervalSeconds: TimeInterval = 0.25
+
+/// How one alert looks and how long it lives; Settings values are mapped to it in one place.
+struct Appearance {
+  let color: RGBColor
+  let textIsBlack: Bool
+  let showsLabel: Bool
+  /// nil: no exit animation and no expiry.
+  let lifetime: TimeInterval?
+}
 
 func millisecondsSince(_ start: DispatchTime) -> Int {
   Int((DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000)
@@ -153,10 +161,13 @@ private func animation(_ motion: Motion, on layer: CALayer, scale: Double, enter
   return animation
 }
 
-/// Draws the alert on the screen edge without activating the app; it lives `lifetimeSeconds` from the first show, even when hidden.
+/// Draws the alert on the screen edge without activating the app; it lives `lifetime` from the first show, even when hidden.
 final class Panel: NSObject {
   private let name: String
   private let color: NSColor
+  private let textIsBlack: Bool
+  private let showsLabel: Bool
+  private let lifetime: TimeInterval?
   private let onSample: (_ active: Bool, _ elapsedMs: Int) -> Void
   private let onExpiry: () -> Void
   private var window: NSPanel?
@@ -166,26 +177,38 @@ final class Panel: NSObject {
   private(set) var visibleSide: Side?
 
   init(
-    name: String, color: RGBColor,
+    name: String, appearance: Appearance,
     onSample: @escaping (_ active: Bool, _ elapsedMs: Int) -> Void,
     onExpiry: @escaping () -> Void
   ) {
     self.name = name
+    let rgb = appearance.color
     self.color = NSColor(
-      srgbRed: CGFloat(color.red) / 255, green: CGFloat(color.green) / 255,
-      blue: CGFloat(color.blue) / 255, alpha: 1)
+      srgbRed: CGFloat(rgb.red) / 255, green: CGFloat(rgb.green) / 255,
+      blue: CGFloat(rgb.blue) / 255, alpha: 1)
+    self.textIsBlack = appearance.textIsBlack
+    self.showsLabel = appearance.showsLabel
+    self.lifetime = appearance.lifetime
     self.onSample = onSample
     self.onExpiry = onExpiry
     super.init()
+  }
+
+  /// Slots from the centre downwards whose label fits the main screen.
+  func sideCapacity() throws -> Int {
+    guard let screen = NSScreen.screens.first?.frame else { throw NoScreen() }
+    return slotCapacity(
+      screenHeight: Double(screen.height), labelHeight: Double(labelHeight), slotStep: Double(slotStep))
   }
 
   // This setup was verified not to take focus; retest any change on screen.
   func show(side: Side, slot: Int) throws {
     guard let screen = NSScreen.screens.first?.frame else { throw NoScreen() }
     hide()
-    let label = makeLabel()
-    guard let labelLayer = label.layer else { throw NoLayer() }
-    let width = stripWidth + labelGap + label.frame.width + labelBleed
+    let label = showsLabel ? makeLabel() : nil
+    // Without a label the animation tables still need a layer to act on; it is never attached.
+    guard let labelLayer = label == nil ? CALayer() : label?.layer else { throw NoLayer() }
+    let width = stripWidth + labelBleed + (label.map { labelGap + $0.frame.width } ?? 0)
     let panel = NSPanel(
       contentRect: NSRect(
         x: side == .left ? screen.minX : screen.maxX - width, y: screen.minY,
@@ -207,12 +230,16 @@ final class Panel: NSObject {
       side: side, width: width, height: screen.height, label: labelLayer,
       reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     root.addSublayer(built.light)
-    label.setFrameOrigin(NSPoint(
-      x: side == .left ? stripWidth + labelGap : labelBleed,
-      y: (screen.height - labelHeight) / 2 - CGFloat(slot) * slotStep))
-    content.addSubview(label)
+    if let label {
+      label.setFrameOrigin(NSPoint(
+        x: side == .left ? stripWidth + labelGap : labelBleed,
+        y: (screen.height - labelHeight) / 2 - CGFloat(slot) * slotStep))
+      content.addSubview(label)
+    }
     panel.contentView = content
-    if exitStarted { startExit(built, scale: remainingSeconds() / exitSeconds) } else { enter(built) }
+    if exitStarted, let remaining = remainingSeconds() {
+      startExit(built, scale: remaining / exitSeconds)
+    } else { enter(built) }
     CATransaction.commit()
     panel.orderFrontRegardless()
     window = panel
@@ -233,11 +260,12 @@ final class Panel: NSObject {
     Timer.scheduledTimer(
       timeInterval: sampleIntervalSeconds, target: self, selector: #selector(sample),
       userInfo: nil, repeats: true)
+    guard let lifetime else { return }
     Timer.scheduledTimer(
-      timeInterval: lifetimeSeconds - exitSeconds, target: self, selector: #selector(beginExit),
+      timeInterval: lifetime - exitSeconds, target: self, selector: #selector(beginExit),
       userInfo: nil, repeats: false)
     Timer.scheduledTimer(
-      timeInterval: lifetimeSeconds, target: self, selector: #selector(expire),
+      timeInterval: lifetime, target: self, selector: #selector(expire),
       userInfo: nil, repeats: false)
   }
 
@@ -256,9 +284,10 @@ final class Panel: NSObject {
     onExpiry()
   }
 
-  private func remainingSeconds() -> TimeInterval {
-    guard let start = firstShown else { return lifetimeSeconds }
-    return max(0, lifetimeSeconds - Double(millisecondsSince(start)) / 1000)
+  private func remainingSeconds() -> TimeInterval? {
+    guard let lifetime else { return nil }
+    guard let start = firstShown else { return lifetime }
+    return max(0, lifetime - Double(millisecondsSince(start)) / 1000)
   }
 
   private func enter(_ layers: Layers) {
@@ -349,7 +378,7 @@ final class Panel: NSObject {
   private func makeLabel() -> NSView {
     let text = NSTextField(labelWithString: name)
     text.font = .systemFont(ofSize: fontSize, weight: .semibold)
-    text.textColor = .black
+    text.textColor = textIsBlack ? .black : .white
     text.lineBreakMode = .byTruncatingTail
     text.maximumNumberOfLines = 1
     text.sizeToFit()
