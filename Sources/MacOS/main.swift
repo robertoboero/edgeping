@@ -8,6 +8,7 @@ let stateDirectory = temporaryDirectory.appendingPathComponent("edgeping").path
 let subagentDirectory = stateDirectory + "/subagents"
 let arguments = CommandLine.arguments
 let home = environment["HOME"] ?? ""
+let logDirectory = home + "/Library/Logs/edgeping"
 
 // Three modes of the same binary; any other form is invalid-arguments.
 if arguments.count == 2, let mode = Mode(rawValue: arguments[1]) {
@@ -18,14 +19,14 @@ if arguments.count == 2, let mode = Mode(rawValue: arguments[1]) {
 } else if arguments.count == 3 || arguments.count == 4, let mode = Mode(rawValue: arguments[1]) {
   runAlert(mode: mode, cwd: arguments[2], eventText: arguments.count == 4 ? arguments[3] : nil)
 } else {
-  OutcomeLog(directory: stateDirectory, event: nil).write(.invalidArguments)
+  OutcomeLog(directory: logDirectory, event: nil).write(.invalidArguments)
   exit(0)
 }
 
 /// Hook mode: decides, launches the sound and the alert detached, and exits without waiting for them.
 func runHook(mode: Mode) -> Never {
   let event = EventID(startNanoseconds: t0.uptimeNanoseconds, pid: getpid())
-  let log = OutcomeLog(directory: stateDirectory, event: event)
+  let log = OutcomeLog(directory: logDirectory, event: event)
   let input: HookInput
   do {
     input = try readHookInput()
@@ -67,7 +68,7 @@ func launchChild(_ launcher: Launcher, _ childArguments: [String], log: OutcomeL
 
 /// Sound mode: lives until playback ends; `ms=` runs from the start of the hook mode to the return of play().
 func runSound(mode: Mode, event: EventID) -> Never {
-  let log = OutcomeLog(directory: stateDirectory, event: event)
+  let log = OutcomeLog(directory: logDirectory, event: event)
   do {
     // No NSApplication: it costs tens of ms before play() and NSSound does not need it.
     let player = try SoundPlayer(mode: mode, onFinish: { exit(0) })
@@ -90,7 +91,7 @@ func millisecondsSince(nanoseconds start: UInt64) -> Int {
 /// Alert mode: launched by the hook mode with the event, or by hand without it.
 func runAlert(mode: Mode, cwd: String, eventText: String?) -> Never {
   let event = eventText.flatMap { EventID(text: $0) }
-  let log = OutcomeLog(directory: stateDirectory, event: event)
+  let log = OutcomeLog(directory: logDirectory, event: event)
   guard cwd.hasPrefix("/"), home.hasPrefix("/"), eventText == nil || event != nil else {
     log.write(.invalidArguments, cwd: cwd)
     exit(0)
@@ -227,32 +228,5 @@ final class Alert: NSObject {
   private func expire() {
     slots.releaseSlot(slot)
     exit(0)
-  }
-}
-
-// Best-effort log: if a line cannot be written, the alert carries on anyway.
-struct OutcomeLog {
-  private static let maxBytes: off_t = 64 * 1024
-  let directory: String
-  /// Ties together the lines of the processes of the same event; nil for an alert launched by hand.
-  let event: EventID?
-
-  func write(_ outcome: Outcome, name: String? = nil, cwd: String? = nil, fields: String? = nil) {
-    try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-    let path = directory + "/outcomes.log"
-    var info = stat()
-    if stat(path, &info) == 0 && info.st_size > Self.maxBytes { truncate(path, 0) }
-    let formatter = ISO8601DateFormatter()
-    formatter.timeZone = .current
-    var line = formatter.string(from: Date()) + " outcome=" + outcome.rawValue
-    if let event { line += " event=" + event.text }
-    if let name { line += " name=" + name }
-    if let cwd { line += " cwd=" + cwd }
-    if let fields { line += " " + fields }
-    let bytes = Array((line + "\n").utf8)
-    let descriptor = open(path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
-    guard descriptor >= 0 else { return }
-    _ = bytes.withUnsafeBufferPointer { Darwin.write(descriptor, $0.baseAddress, $0.count) }
-    close(descriptor)
   }
 }

@@ -56,7 +56,7 @@ expectSameNames("cwd equal to HOME: no candidates", names(home), [])
 
 // MARK: window name from the title
 
-expectEqual("the name is the part after the last spaced em dash", windowName("Placement.swift — .claude"), ".claude")
+expectEqual("the name is the part after the last spaced em dash", windowName("Placement.swift — project-c"), "project-c")
 expectEqual("several em dashes: the last one counts", windowName("a — b — project-a"), "project-a")
 expectEqual("without an em dash: the whole title", windowName("project-b"), "project-b")
 expectEqual("the short hyphen does not separate", windowName("a - b"), "a - b")
@@ -66,38 +66,38 @@ expectEqual("empty title: empty name", windowName(""), "")
 
 func win(_ id: Int, _ title: String) -> CodeWindow { CodeWindow(id: id, title: title, spaces: [id]) }
 
-let hash = win(1, "main.ts — project-a")
-let cb = win(2, "README.md — project-b")
-let claude = win(3, "settings.json — .claude")
+let a = win(1, "main.ts — project-a")
+let b = win(2, "README.md — project-b")
+let c = win(3, "settings.json — project-c")
 let dev = win(4, "Dev")
 
 do {
-  let chosen = try chooseWindow([hash, cb, claude], candidates: ["project-b"])
-  expectEqual("a single matching window is chosen, with id and name", chosen, ChosenWindow(window: cb, name: "project-b"))
+  let chosen = try chooseWindow([a, b, c], candidates: ["project-b"])
+  expectEqual("a single matching window is chosen, with id and name", chosen, ChosenWindow(window: b, name: "project-b"))
 } catch {
   report("a single matching window is chosen, with id and name", false, "error \(error)")
 }
 expectFailure("no window matches: window-not-found", .windowNotFound) {
-  try chooseWindow([hash, cb], candidates: ["no-window", "tmp"])
+  try chooseWindow([a, b], candidates: ["no-window", "tmp"])
 }
 expectFailure("no window open: window-not-found", .windowNotFound) {
   try chooseWindow([], candidates: ["project-b"])
 }
 expectFailure("no candidate: window-not-found", .windowNotFound) {
-  try chooseWindow([hash, cb], candidates: [])
+  try chooseWindow([a, b], candidates: [])
 }
 expectFailure("the name must match in full, not by prefix", .windowNotFound) {
-  try chooseWindow([hash], candidates: ["project"])
+  try chooseWindow([a], candidates: ["project"])
 }
 expectFailure("two windows with the same name: ambiguous-window", .ambiguousWindow) {
-  try chooseWindow([hash, win(9, "other.ts — project-a")], candidates: ["project-a"])
+  try chooseWindow([a, win(9, "other.ts — project-a")], candidates: ["project-a"])
 }
 expectFailure("candidates of different levels pointing at different windows: ambiguous-window", .ambiguousWindow) {
-  try chooseWindow([hash, dev], candidates: ["Dev", "project-a"])
+  try chooseWindow([a, dev], candidates: ["Dev", "project-a"])
 }
 do {
-  let chosen = try chooseWindow([hash, cb], candidates: ["Dev", "project-a"])
-  expectEqual("two candidates, a single window: no ambiguity", chosen.window, hash)
+  let chosen = try chooseWindow([a, b], candidates: ["Dev", "project-a"])
+  expectEqual("two candidates, a single window: no ambiguity", chosen.window, a)
 } catch {
   report("two candidates, a single window: no ambiguity", false, "error \(error)")
 }
@@ -111,17 +111,17 @@ expectFailure("windows present but every title empty: empty-titles", .emptyTitle
   try chooseWindow([win(1, ""), win(2, "")], candidates: ["project-b"])
 }
 do {
-  let chosen = try chooseWindow([win(1, ""), cb], candidates: ["project-b"])
-  expectEqual("a single empty title among others: not empty-titles", chosen.window, cb)
+  let chosen = try chooseWindow([win(1, ""), b], candidates: ["project-b"])
+  expectEqual("a single empty title among others: not empty-titles", chosen.window, b)
 } catch {
   report("a single empty title among others: not empty-titles", false, "error \(error)")
 }
 
 // MARK: presence
 
-// Test order: desk, .claude, project-a, project-b.
-let desk = 1, claudeSpace = 143, hashSpace = 251, cbSpace = 323
-let order = [desk, claudeSpace, hashSpace, cbSpace]
+// Test order: desk, project-c, project-a, project-b.
+let desk = 1, cSpace = 143, aSpace = 251, bSpace = 323
+let order = [desk, cSpace, aSpace, bSpace]
 
 func presence(current: Int, window: [Int], displays: Int = 1) throws -> Presence {
   try computePresence(Spaces(order: order, current: current, displayCount: displays), windowSpaces: window)
@@ -135,26 +135,26 @@ func expectPresence(_ name: String, current: Int, window: [Int], _ expected: Pre
   }
 }
 
-expectPresence("from project-a, alert from .claude: left side", current: hashSpace, window: [claudeSpace], .side(.left))
-expectPresence("from project-a, alert from project-b: right side", current: hashSpace, window: [cbSpace], .side(.right))
-expectPresence("from project-b, alert from .claude (two spaces before): still left", current: cbSpace, window: [claudeSpace], .side(.left))
-expectPresence("at any distance to the right: from the desk, alert from project-b", current: desk, window: [cbSpace], .side(.right))
-expectPresence("at any distance to the left: from project-b, alert from the desk", current: cbSpace, window: [desk], .side(.left))
-expectPresence("on .claude: alert from project-a on the right", current: claudeSpace, window: [hashSpace], .side(.right))
-expectPresence("the window is in the current space, even when arriving there: hidden", current: hashSpace, window: [hashSpace], .hidden)
-expectPresence("then on project-b it reappears on the left", current: cbSpace, window: [hashSpace], .side(.left))
-expectPresence("one of the window spaces is the current one: hidden", current: claudeSpace, window: [hashSpace, claudeSpace], .hidden)
+expectPresence("from project-a, alert from project-c: left side", current: aSpace, window: [cSpace], .side(.left))
+expectPresence("from project-a, alert from project-b: right side", current: aSpace, window: [bSpace], .side(.right))
+expectPresence("from project-b, alert from project-c (two spaces before): still left", current: bSpace, window: [cSpace], .side(.left))
+expectPresence("at any distance to the right: from the desk, alert from project-b", current: desk, window: [bSpace], .side(.right))
+expectPresence("at any distance to the left: from project-b, alert from the desk", current: bSpace, window: [desk], .side(.left))
+expectPresence("on project-c: alert from project-a on the right", current: cSpace, window: [aSpace], .side(.right))
+expectPresence("the window is in the current space, even when arriving there: hidden", current: aSpace, window: [aSpace], .hidden)
+expectPresence("then on project-b it reappears on the left", current: bSpace, window: [aSpace], .side(.left))
+expectPresence("one of the window spaces is the current one: hidden", current: cSpace, window: [aSpace, cSpace], .hidden)
 expectFailure("more than one display: multiple-displays", .multipleDisplays) {
-  try presence(current: hashSpace, window: [claudeSpace], displays: 2)
+  try presence(current: aSpace, window: [cSpace], displays: 2)
 }
 expectFailure("more than one display wins even if the window is in the current space", .multipleDisplays) {
-  try presence(current: hashSpace, window: [hashSpace], displays: 2)
+  try presence(current: aSpace, window: [aSpace], displays: 2)
 }
 expectFailure("window with no space at all: probe-failed", .probeFailed) {
-  try presence(current: hashSpace, window: [])
+  try presence(current: aSpace, window: [])
 }
 expectFailure("window space missing from the order: probe-failed", .probeFailed) {
-  try presence(current: hashSpace, window: [9999])
+  try presence(current: aSpace, window: [9999])
 }
 
 // MARK: reconciliation
