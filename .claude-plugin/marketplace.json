@@ -1,0 +1,13 @@
+{
+  "name": "edgeping",
+  "owner": {
+    "name": "Roberto Boero"
+  },
+  "plugins": [
+    {
+      "name": "edgeping",
+      "source": "./",
+      "description": "Edge-of-screen strip and sound when a Claude Code conversation in another VS Code window finishes or asks you something. For Claude Code on macOS; not affiliated with Anthropic."
+    }
+  ]
+}
