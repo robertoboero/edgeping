@@ -183,3 +183,62 @@ func reconcile(desired: Presence, slot: Presence, panel: Side?) -> [Action] {
   }
   return actions
 }
+
+let visitDwellSeconds: Double = 1.0
+let windowCheckSeconds: Double = 5
+
+/// Raw result of one window lookup, as the macOS adapter returns it.
+struct WindowLookup {
+  let listReadOK: Bool
+  let listCount: Int
+  /// nil when the window id is not among the VS Code windows.
+  let windowSpaces: [Int]?
+}
+
+enum WindowRead: Equatable {
+  case present([Int])
+  case absent
+  case unreadable
+}
+
+/// An empty or failed list, or a window with no space, is never a closure.
+func classify(_ lookup: WindowLookup) -> WindowRead {
+  guard lookup.listReadOK, lookup.listCount > 0 else { return .unreadable }
+  guard let spaces = lookup.windowSpaces else { return .absent }
+  return spaces.isEmpty ? .unreadable : .present(spaces)
+}
+
+/// Raw values are the `via=` field of the outcome log.
+enum ReadSource: String {
+  case poll
+  case spaceChange = "space-change"
+}
+
+struct ClosureTracker {
+  private(set) var consecutiveAbsent = 0
+  /// Returns the source that completed two consecutive successful absences.
+  mutating func record(_ read: WindowRead, from source: ReadSource) -> ReadSource? {
+    guard read == .absent else {
+      consecutiveAbsent = 0
+      return nil
+    }
+    consecutiveAbsent += 1
+    return consecutiveAbsent >= 2 ? source : nil
+  }
+}
+
+struct VisitTracker {
+  private(set) var arrivedAt: Double?
+  mutating func arrived(at time: Double) { arrivedAt = time }
+  mutating func left() { arrivedAt = nil }
+  func isVisited(at time: Double) -> Bool {
+    guard let start = arrivedAt else { return false }
+    return time - start >= visitDwellSeconds
+  }
+}
+
+/// Slots from the centre downwards whose label stays fully on screen.
+func slotCapacity(screenHeight: Double, labelHeight: Double, slotStep: Double) -> Int {
+  guard screenHeight >= labelHeight, slotStep > 0 else { return 0 }
+  return Int(((screenHeight - labelHeight) / 2 / slotStep).rounded(.down)) + 1
+}
