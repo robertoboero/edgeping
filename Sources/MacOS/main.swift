@@ -115,7 +115,7 @@ func prepareAlert(mode: Mode, cwd: String, home: String, directory: String, log:
     let chosen = try chooseWindow(reading.windows, candidates: candidateNames(cwd: cwd, home: home))
     let presence = try computePresence(reading.spaces, windowSpaces: chosen.window.spaces)
     let slots = FileSlots(directory: directory, pid: getpid())
-    guard let slot = try slots.takeSlot(name: chosen.name, presence: presence) else {
+    guard let slot = try slots.takeSlot(name: chosen.name, presence: presence, capacity: Int.max) else {
       log.write(.currentSpace, name: chosen.name, cwd: cwd)
       exit(0)
     }
@@ -135,7 +135,7 @@ func outcome(of error: Error) -> Outcome {
   case let slotError as SlotError:
     switch slotError {
     case .contended: return .slotsContended
-    case .unavailable, .uncertain: return .slotsUnavailable
+    case .unavailable, .uncertain, .full: return .slotsUnavailable
     }
   case is ProbeError, is NoScreen: return .probeFailed
   default: return .probeFailed
@@ -212,7 +212,7 @@ final class Alert: NSObject {
     guard let wanted = desired else { return }
     for action in reconcile(desired: wanted, slot: slot.presence, panel: panel.visibleSide) {
       switch action {
-      case .moveSlot(let target): slot = try slots.moveSlot(slot, to: target, name: name)
+      case .moveSlot(let target): slot = try slots.moveSlot(slot, to: target, name: name, capacity: Int.max)
       case .show(let side): try panel.show(side: side, slot: slot.number)
       case .hide: panel.hide()
       }

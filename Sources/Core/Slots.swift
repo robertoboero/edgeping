@@ -23,7 +23,7 @@ final class FileSlots: SlotLedger {
     self.pid = pid
   }
 
-  func takeSlot(name: String, presence: Presence) throws -> Slot? {
+  func takeSlot(name: String, presence: Presence, capacity: Int) throws -> Slot? {
     do {
       try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
     } catch {
@@ -39,18 +39,19 @@ final class FileSlots: SlotLedger {
         remove(entry.file)
       }
       guard case .side = presence else { return nil }
-      let slot = Slot(presence: presence, number: firstFree(presence, among: alive.filter { $0.name != name }))
+      let slot = Slot(
+        presence: presence, number: try freeNumber(presence, capacity: capacity, among: alive.filter { $0.name != name }))
       guard create(slot, name: name) else { throw SlotError.unavailable }
       return slot
     }
   }
 
-  func moveSlot(_ slot: Slot, to presence: Presence, name: String) throws -> Slot {
+  func moveSlot(_ slot: Slot, to presence: Presence, name: String, capacity: Int) throws -> Slot {
     try withLock { () throws -> Slot in
       let old = fileName(slot)
       let entries = try readEntries()
       guard entries.contains(where: { $0.file == old && $0.pid == pid }) else { throw SlotError.uncertain }
-      let new = Slot(presence: presence, number: firstFree(presence, among: entries))
+      let new = Slot(presence: presence, number: try freeNumber(presence, capacity: capacity, among: entries))
       guard create(new, name: name) else { throw SlotError.unavailable }
       remove(old)
       return new
@@ -106,6 +107,12 @@ final class FileSlots: SlotLedger {
     case .side(let side): return "\(side.rawValue)-\(slot.number)"
     case .hidden: return "\(Self.hiddenPrefix)-\(slot.number)"
     }
+  }
+
+  private func freeNumber(_ presence: Presence, capacity: Int, among entries: [SlotEntry]) throws -> Int {
+    let number = firstFree(presence, among: entries)
+    if case .side = presence, number >= capacity { throw SlotError.full }
+    return number
   }
 
   private func firstFree(_ presence: Presence, among entries: [SlotEntry]) -> Int {
