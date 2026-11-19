@@ -229,14 +229,14 @@ func contrastWithBlack(_ color: RGBColor) -> Double {
 let wcagThreshold = 4.5
 
 expectEqual("the formula: black on white is 21:1", (contrastWithBlack(RGBColor(red: 255, green: 255, blue: 255)) * 100).rounded() / 100, 21.0)
-report("default orange with black text above 4.5:1", contrastWithBlack(color(for: .done)) > wcagThreshold, "got \(contrastWithBlack(color(for: .done)))")
-report("system blue with black text above 4.5:1", contrastWithBlack(color(for: .question)) > wcagThreshold, "got \(contrastWithBlack(color(for: .question)))")
-report("default orange: declared ratio about 6.7:1", abs(contrastWithBlack(color(for: .done)) - 6.7) < 0.1, "got \(contrastWithBlack(color(for: .done)))")
-report("system blue: declared ratio about 5.2:1", abs(contrastWithBlack(color(for: .question)) - 5.2) < 0.1, "got \(contrastWithBlack(color(for: .question)))")
+report("default orange with black text above 4.5:1", contrastWithBlack(Settings().color(for: .done)) > wcagThreshold, "got \(contrastWithBlack(Settings().color(for: .done)))")
+report("system blue with black text above 4.5:1", contrastWithBlack(Settings().color(for: .question)) > wcagThreshold, "got \(contrastWithBlack(Settings().color(for: .question)))")
+report("default orange: declared ratio about 6.7:1", abs(contrastWithBlack(Settings().color(for: .done)) - 6.7) < 0.1, "got \(contrastWithBlack(Settings().color(for: .done)))")
+report("system blue: declared ratio about 5.2:1", abs(contrastWithBlack(Settings().color(for: .question)) - 5.2) < 0.1, "got \(contrastWithBlack(Settings().color(for: .question)))")
 
 // One test pins the required values by hand: a changed constant turns red.
-expectEqual("done is #D97757", color(for: .done), RGBColor(red: 0xD9, green: 0x77, blue: 0x57))
-expectEqual("question is #007AFF", color(for: .question), RGBColor(red: 0x00, green: 0x7A, blue: 0xFF))
+expectEqual("done is #D97757", Settings().color(for: .done), RGBColor(red: 0xD9, green: 0x77, blue: 0x57))
+expectEqual("question is #007AFF", Settings().color(for: .question), RGBColor(red: 0x00, green: 0x7A, blue: 0xFF))
 
 print("PASSED: \(passed) FAILED: \(failed)")
 exit(failed == 0 ? 0 : 1)

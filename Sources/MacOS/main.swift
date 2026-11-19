@@ -34,12 +34,17 @@ func runHook(mode: Mode) -> Never {
     log.write(.invalidInput)
     exit(0)
   }
+  // Only this mode records rejected options: its children reread the same variables silently.
+  let parsed = parseSettings(environment, sounds: SystemSounds())
+  for key in parsed.invalid { log.write(.optionInvalid, cwd: input.cwd, fields: "option=" + key) }
+  let settings = parsed.settings
   let state = SubagentState(directory: subagentDirectory)
   let saved = input.runningSubagents == nil ? state.read(sessionID: input.sessionID) : nil
   let decision = decide(mode: mode, input: input, savedCount: saved)
   // The count is saved after the launches: a slow disk write must not delay the sound.
   let saveCount = { if let count = decision.countToSave { state.write(count, sessionID: input.sessionID) } }
-  guard decision.plays else {
+  // With both outputs off no child and no slot lock is created.
+  guard decision.plays, settings.soundEnabled || settings.stripEnabled else {
     saveCount()
     exit(0)
   }
@@ -50,8 +55,10 @@ func runHook(mode: Mode) -> Never {
   }
   let launcher = Launcher(executable: executable, environment: environment)
   // The sound starts first and alone: a failing alert neither stops nor delays it.
-  launchChild(launcher, ["sound", mode.rawValue, event.text], log: log, cwd: input.cwd)
-  if let cwd = decision.alertCwd {
+  if settings.soundEnabled {
+    launchChild(launcher, ["sound", mode.rawValue, event.text], log: log, cwd: input.cwd)
+  }
+  if settings.stripEnabled, let cwd = decision.alertCwd {
     launchChild(launcher, [mode.rawValue, cwd, event.text], log: log, cwd: cwd)
   }
   saveCount()
@@ -71,7 +78,8 @@ func runSound(mode: Mode, event: EventID) -> Never {
   let log = OutcomeLog(directory: logDirectory, event: event)
   do {
     // No NSApplication: it costs tens of ms before play() and NSSound does not need it.
-    let player = try SoundPlayer(name: Settings().sound(for: mode), onFinish: { exit(0) })
+    let settings = parseSettings(environment, sounds: SystemSounds()).settings
+    let player = try SoundPlayer(name: settings.sound(for: mode), onFinish: { exit(0) })
     try player.play()
     log.write(.soundOK, fields: "ms=\(millisecondsSince(nanoseconds: event.startNanoseconds))")
     // The delegate and the timer live as long as the player: it must stay alive while the run loop runs.
@@ -110,27 +118,38 @@ func runAlert(mode: Mode, cwd: String, eventText: String?) -> Never {
 /// Recognises the window and takes the slot; every expected failure ends here with its log line.
 func prepareAlert(mode: Mode, cwd: String, home: String, directory: String, log: OutcomeLog) -> Alert {
   do {
+    // Read again from the environment without logging: the hook mode already recorded rejected options.
+    let settings = parseSettings(environment, sounds: SystemSounds()).settings
+    let appearance = appearance(for: mode, settings: settings)
     let probe = try CGSProbe()
     let reading = try probe.read()
     let chosen = try chooseWindow(reading.windows, candidates: candidateNames(cwd: cwd, home: home))
     let presence = try computePresence(reading.spaces, windowSpaces: chosen.window.spaces)
+    // The slot needs the capacity before the alert exists; its own panel would report the same figure.
+    let capacity = try Panel(name: chosen.name, appearance: appearance, onSample: { _, _ in }, onExpiry: {})
+      .sideCapacity()
     let slots = FileSlots(directory: directory, pid: getpid())
-    guard let slot = try slots.takeSlot(name: chosen.name, presence: presence, capacity: Int.max) else {
+    let slot: Slot?
+    do {
+      slot = try slots.takeSlot(name: chosen.name, presence: presence, capacity: capacity)
+    } catch SlotError.full {
+      log.write(.slotsFull, name: chosen.name, cwd: cwd, fields: "when=new")
+      exit(0)
+    }
+    guard let slot else {
       log.write(.currentSpace, name: chosen.name, cwd: cwd)
       exit(0)
     }
     return Alert(
-      probe: probe, slots: slots, chosen: chosen, slot: slot, appearance: appearance(for: mode),
-      log: log, cwd: cwd)
+      probe: probe, slots: slots, chosen: chosen, slot: slot, capacity: capacity, appearance: appearance,
+      stayUntilVisited: settings.stayUntilVisited, log: log, cwd: cwd)
   } catch {
     log.write(outcome(of: error), cwd: cwd)
     exit(0)
   }
 }
 
-// Until the settings are read from the environment, the defaults give the values the strip always had.
-func appearance(for mode: Mode) -> Appearance {
-  let settings = Settings()
+func appearance(for mode: Mode, settings: Settings) -> Appearance {
   let color = settings.color(for: mode)
   return Appearance(
     color: color, textIsBlack: labelTextIsBlack(on: color), showsLabel: settings.labelEnabled,
@@ -144,25 +163,31 @@ func outcome(of error: Error) -> Outcome {
   case let slotError as SlotError:
     switch slotError {
     case .contended: return .slotsContended
-    case .unavailable, .uncertain, .full: return .slotsUnavailable
+    case .unavailable, .uncertain: return .slotsUnavailable
+    case .full: return .slotsFull
     }
   case is ProbeError, is NoScreen: return .probeFailed
   default: return .probeFailed
   }
 }
 
-/// State of the alert in the process: desired presence and owned slot; the visible panel is known to `Panel`.
+// The system may group the wake-ups of the periodic read: it needs no precision.
+private let windowCheckToleranceSeconds: TimeInterval = 1
+
+/// State of the alert in the process: the owned slot and the timers; every decision is `StayMachine`'s.
 final class Alert: NSObject {
-  private let probe: SpaceProbe
+  private let probe: CGSProbe
   private let slots: SlotLedger
   private let windowID: Int
   private let name: String
   private let appearance: Appearance
+  private let capacity: Int
+  private let stayUntilVisited: Bool
   private let log: OutcomeLog
   private let cwd: String
   private var slot: Slot
-  // nil means "unknown": after a reread or move error, until a reread succeeds.
-  private var desired: Presence?
+  private var machine: StayMachine
+  private var dwellTimer: Timer?
   private var errorLogged = false
   private var focusLogged = false
   private lazy var panel = Panel(
@@ -171,61 +196,124 @@ final class Alert: NSObject {
     onExpiry: { [unowned self] in self.expire() })
 
   init(
-    probe: SpaceProbe, slots: SlotLedger, chosen: ChosenWindow, slot: Slot, appearance: Appearance,
-    log: OutcomeLog, cwd: String
+    probe: CGSProbe, slots: SlotLedger, chosen: ChosenWindow, slot: Slot, capacity: Int,
+    appearance: Appearance, stayUntilVisited: Bool, log: OutcomeLog, cwd: String
   ) {
     self.probe = probe
     self.slots = slots
     self.windowID = chosen.window.id
     self.name = chosen.name
     self.appearance = appearance
+    self.capacity = capacity
+    self.stayUntilVisited = stayUntilVisited
     self.log = log
     self.cwd = cwd
     self.slot = slot
-    self.desired = slot.presence
+    self.machine = StayMachine(initial: slot.presence, stayUntilVisited: stayUntilVisited)
     super.init()
   }
 
   func showFirstTime(since t0: DispatchTime) {
     do {
-      try reconcileNow()
+      if case .side(let side) = slot.presence { try panel.show(side: side, slot: slot.number) }
     } catch {
       log.write(outcome(of: error), name: name, cwd: cwd)
       slots.releaseSlot(slot)
       exit(0)
     }
     log.write(.ok, name: name, cwd: cwd, fields: "ms=\(millisecondsSince(t0))")
+    guard stayUntilVisited else { return }
+    let tick = Timer.scheduledTimer(withTimeInterval: windowCheckSeconds, repeats: true) { [unowned self] _ in
+      self.feed(StayEvent.tick)
+    }
+    tick.tolerance = windowCheckToleranceSeconds
   }
 
   @objc func spaceDidChange(_ notification: Notification) {
+    feed(StayEvent.notification)
+  }
+
+  /// Every read is taken now, with the spaces order and the current space of this very moment.
+  private func feed(_ event: (WindowRead, Int?, [Int], Double) -> StayEvent) {
+    let lookup = probe.lookup(window: windowID)
+    // More than one display is never a readable state: the strip is not shown there.
+    let read = (lookup.spaces?.displayCount ?? 1) > 1 ? WindowRead.unreadable : classify(lookup.window)
+    let now = ProcessInfo.processInfo.systemUptime
+    apply(machine.handle(event(read, lookup.spaces?.current, lookup.spaces?.order ?? [], now)))
+  }
+
+  private func apply(_ actions: [StayAction]) {
+    for action in actions {
+      switch action {
+      case .hidePanel: panel.hide()
+      case .showPanel(let side): show(side)
+      case .startDwell:
+        dwellTimer = Timer.scheduledTimer(withTimeInterval: visitDwellSeconds, repeats: false) {
+          [unowned self] _ in self.feed(StayEvent.dwellElapsed)
+        }
+      case .cancelDwell:
+        dwellTimer?.invalidate()
+        dwellTimer = nil
+      case .moveSlot(let target): move(to: target)
+      case .moveSlotWaiting: moveToWaiting()
+      case .logSlotsFullOnMove: log.write(.slotsFull, name: name, cwd: cwd, fields: "when=move")
+      case .end(let end): finish(end)
+      case .logProbeFailedOnce: log.write(.probeFailed, name: name, cwd: cwd)
+      }
+    }
+  }
+
+  private func show(_ side: Side) {
     do {
-      let rereading = try probe.reread(window: windowID)
-      desired = try computePresence(rereading.spaces, windowSpaces: rereading.windowSpaces)
-      // The panel is recreated on the current space at every change, even when the side is unchanged.
-      panel.hide()
-      try reconcileNow()
-    } catch SlotError.uncertain {
-      panel.hide()
-      exit(0)
+      try panel.show(side: side, slot: slot.number)
     } catch {
       panel.hide()
-      desired = nil
-      guard !errorLogged else { return }
-      errorLogged = true
-      log.write(outcome(of: error), name: name, cwd: cwd)
+      logOnce(error)
     }
   }
 
   // The slot moves before showing: the panel is only created on an already owned slot.
-  private func reconcileNow() throws {
-    guard let wanted = desired else { return }
-    for action in reconcile(desired: wanted, slot: slot.presence, panel: panel.visibleSide) {
-      switch action {
-      case .moveSlot(let target): slot = try slots.moveSlot(slot, to: target, name: name, capacity: Int.max)
-      case .show(let side): try panel.show(side: side, slot: slot.number)
-      case .hide: panel.hide()
-      }
+  private func move(to target: Presence) {
+    guard case .side(let side) = target else { return }
+    do {
+      slot = try slots.moveSlot(slot, to: target, name: name, capacity: capacity)
+      apply(machine.handle(.placement(succeeded: true, side: side)))
+    } catch SlotError.full {
+      apply(machine.handle(.placement(succeeded: false, side: side)))
+    } catch SlotError.uncertain {
+      apply(machine.handle(.slotLost))
+    } catch {
+      panel.hide()
+      logOnce(error)
     }
+  }
+
+  private func moveToWaiting() {
+    do {
+      slot = try slots.moveSlot(slot, to: .hidden, name: name, capacity: capacity)
+    } catch SlotError.uncertain {
+      apply(machine.handle(.slotLost))
+    } catch {
+      panel.hide()
+      guard !errorLogged else { return }
+      errorLogged = true
+      log.write(.slotsUnavailable, name: name, cwd: cwd)
+    }
+  }
+
+  private func finish(_ end: StayEnd) -> Never {
+    panel.hide()
+    slots.releaseSlot(slot)
+    if case .gone(let source) = end {
+      log.write(.windowGone, name: name, cwd: cwd, fields: "via=" + source.rawValue)
+    }
+    exit(0)
+  }
+
+  private func logOnce(_ error: Error) {
+    guard !errorLogged else { return }
+    errorLogged = true
+    log.write(outcome(of: error), name: name, cwd: cwd)
   }
 
   private func sample(active: Bool, elapsedMs: Int) {

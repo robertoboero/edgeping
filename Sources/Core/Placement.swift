@@ -16,14 +16,6 @@ struct RGBColor: Equatable {
   let blue: UInt8
 }
 
-// Fixed values on purpose: no configuration.
-func color(for mode: Mode) -> RGBColor {
-  switch mode {
-  case .done: return RGBColor(red: 0xD9, green: 0x77, blue: 0x57)
-  case .question: return RGBColor(red: 0x00, green: 0x7A, blue: 0xFF)
-  }
-}
-
 enum Presence: Equatable {
   case side(Side)
   case hidden
