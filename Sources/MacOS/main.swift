@@ -71,7 +71,7 @@ func runSound(mode: Mode, event: EventID) -> Never {
   let log = OutcomeLog(directory: logDirectory, event: event)
   do {
     // No NSApplication: it costs tens of ms before play() and NSSound does not need it.
-    let player = try SoundPlayer(mode: mode, onFinish: { exit(0) })
+    let player = try SoundPlayer(name: Settings().sound(for: mode), onFinish: { exit(0) })
     try player.play()
     log.write(.soundOK, fields: "ms=\(millisecondsSince(nanoseconds: event.startNanoseconds))")
     // The delegate and the timer live as long as the player: it must stay alive while the run loop runs.
@@ -120,12 +120,21 @@ func prepareAlert(mode: Mode, cwd: String, home: String, directory: String, log:
       exit(0)
     }
     return Alert(
-      probe: probe, slots: slots, chosen: chosen, slot: slot, color: color(for: mode),
+      probe: probe, slots: slots, chosen: chosen, slot: slot, appearance: appearance(for: mode),
       log: log, cwd: cwd)
   } catch {
     log.write(outcome(of: error), cwd: cwd)
     exit(0)
   }
+}
+
+// Until the settings are read from the environment, the defaults give the values the strip always had.
+func appearance(for mode: Mode) -> Appearance {
+  let settings = Settings()
+  let color = settings.color(for: mode)
+  return Appearance(
+    color: color, textIsBlack: labelTextIsBlack(on: color), showsLabel: settings.labelEnabled,
+    lifetime: settings.lifetime)
 }
 
 // Expected failures have one branch each; only the default branch is a bug, logged as probe-failed.
@@ -148,7 +157,7 @@ final class Alert: NSObject {
   private let slots: SlotLedger
   private let windowID: Int
   private let name: String
-  private let alertColor: RGBColor
+  private let appearance: Appearance
   private let log: OutcomeLog
   private let cwd: String
   private var slot: Slot
@@ -157,19 +166,19 @@ final class Alert: NSObject {
   private var errorLogged = false
   private var focusLogged = false
   private lazy var panel = Panel(
-    name: name, color: alertColor,
+    name: name, appearance: appearance,
     onSample: { [unowned self] active, elapsedMs in self.sample(active: active, elapsedMs: elapsedMs) },
     onExpiry: { [unowned self] in self.expire() })
 
   init(
-    probe: SpaceProbe, slots: SlotLedger, chosen: ChosenWindow, slot: Slot, color: RGBColor,
+    probe: SpaceProbe, slots: SlotLedger, chosen: ChosenWindow, slot: Slot, appearance: Appearance,
     log: OutcomeLog, cwd: String
   ) {
     self.probe = probe
     self.slots = slots
     self.windowID = chosen.window.id
     self.name = chosen.name
-    self.alertColor = color
+    self.appearance = appearance
     self.log = log
     self.cwd = cwd
     self.slot = slot
