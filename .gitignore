@@ -1,0 +1,7 @@
+# Private design documents, plans and history: kept locally, never published
+docs/
+# Built binary
+bordo/bordo
+.DS_Store
+# Worktrees of parallel work
+.worktrees/
