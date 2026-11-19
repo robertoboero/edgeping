@@ -12,10 +12,10 @@ func plant(_ box: Sandbox, name: String, presence: Presence) throws -> Process {
   let ledger = box.ledger(pid: process.processIdentifier)
   switch presence {
   case .side:
-    _ = try ledger.takeSlot(name: name, presence: presence)
+    _ = try ledger.takeSlot(name: name, presence: presence, capacity: Int.max)
   case .hidden:
     let slot = try takenSlot(ledger, name: name, presence: left)
-    _ = try ledger.moveSlot(slot, to: .hidden, name: name)
+    _ = try ledger.moveSlot(slot, to: .hidden, name: name, capacity: Int.max)
   }
   return process
 }
@@ -29,7 +29,7 @@ func predecessorCase(_ label: String, _ presence: Presence, _ planted: String) -
     let predecessor = try plant(box, name: "A", presence: presence)
     try expectEqual(try box.files(), [planted], "files before")
 
-    let slot = try box.ledger().takeSlot(name: "A", presence: right)
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: right, number: 0), "slot of the new panel")
     try expectEqual(try box.files(), ["right-0"], "files after")
@@ -42,7 +42,7 @@ func hiddenEntryCase(_ label: String, _ presence: Presence) -> TestCase {
   TestCase(name: "with a hidden presence the predecessor \(label) is removed and no file is created") { box in
     let predecessor = try plant(box, name: "A", presence: presence)
 
-    let slot = try box.ledger().takeSlot(name: "A", presence: .hidden)
+    let slot = try box.ledger().takeSlot(name: "A", presence: .hidden, capacity: Int.max)
 
     try expect(slot == nil, "no slot for a hidden presence")
     try expectEqual(try box.files(), [], "no files")
@@ -62,7 +62,7 @@ let cases: [TestCase] = [
     let other = try plant(box, name: "B", presence: left)
     try plant(box, name: "A", presence: right)
 
-    _ = try box.ledger().takeSlot(name: "A", presence: right)
+    _ = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max)
 
     try expectEqual(try box.files(), ["left-0", "right-0"], "files")
     try expect(other.isRunning, "another window's panel must not be stopped")
@@ -71,7 +71,7 @@ let cases: [TestCase] = [
   TestCase(name: "with a hidden presence no file is created and other windows' panels stay") { box in
     try plant(box, name: "B", presence: right)
 
-    let slot = try box.ledger().takeSlot(name: "A", presence: .hidden)
+    let slot = try box.ledger().takeSlot(name: "A", presence: .hidden, capacity: Int.max)
 
     try expect(slot == nil, "no slot")
     try expectEqual(try box.files(), ["right-0"], "only B's file")
@@ -80,7 +80,7 @@ let cases: [TestCase] = [
   TestCase(name: "two windows on the same side take slots 0 and 1") { box in
     try plant(box, name: "B", presence: right)
 
-    let slot = try box.ledger().takeSlot(name: "A", presence: right)
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: right, number: 1), "slot")
     try expectEqual(try box.files(), ["right-0", "right-1"], "files")
@@ -94,7 +94,7 @@ let cases: [TestCase] = [
     box.ledger(pid: middle.processIdentifier).releaseSlot(slotC)
     try expectEqual(try box.files(), ["right-0", "right-2"], "files with the gap")
 
-    let slot = try box.ledger().takeSlot(name: "E", presence: right)
+    let slot = try box.ledger().takeSlot(name: "E", presence: right, capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: right, number: 1), "slot")
   },
@@ -102,7 +102,7 @@ let cases: [TestCase] = [
   TestCase(name: "the first free slot is searched on the requested side only") { box in
     try plant(box, name: "B", presence: left)
 
-    let slot = try box.ledger().takeSlot(name: "A", presence: right)
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: right, number: 0), "slot")
   },
@@ -126,7 +126,7 @@ let cases: [TestCase] = [
     let slotB = try takenSlot(box.ledger(pid: mover.processIdentifier), name: "B", presence: right)
     try plant(box, name: "C", presence: right)
 
-    let moved = try box.ledger(pid: mover.processIdentifier).moveSlot(slotB, to: left, name: "B")
+    let moved = try box.ledger(pid: mover.processIdentifier).moveSlot(slotB, to: left, name: "B", capacity: Int.max)
 
     try expectEqual(moved, Slot(presence: left, number: 0), "new slot")
     try expectEqual(try box.files(), ["left-0", "right-1"], "C stays in slot 1")
@@ -136,7 +136,7 @@ let cases: [TestCase] = [
     try plant(box, name: "B", presence: left)
     let slotA = try takenSlot(box.ledger(), name: "A", presence: right)
 
-    let moved = try box.ledger().moveSlot(slotA, to: left, name: "A")
+    let moved = try box.ledger().moveSlot(slotA, to: left, name: "A", capacity: Int.max)
 
     try expectEqual(moved, Slot(presence: left, number: 1), "new slot")
     try expectEqual(try box.files(), ["left-0", "left-1"], "files")
@@ -146,7 +146,7 @@ let cases: [TestCase] = [
   TestCase(name: "a move to hidden keeps a hidden file with the window name") { box in
     let slotA = try takenSlot(box.ledger(), name: "A", presence: right)
 
-    let moved = try box.ledger().moveSlot(slotA, to: .hidden, name: "A")
+    let moved = try box.ledger().moveSlot(slotA, to: .hidden, name: "A", capacity: Int.max)
 
     try expectEqual(moved, Slot(presence: .hidden, number: 0), "new slot")
     try expectEqual(try box.files(), ["hidden-0"], "files")
@@ -157,7 +157,7 @@ let cases: [TestCase] = [
     let slotA = try takenSlot(box.ledger(), name: "A", presence: right)
     try FileManager.default.removeItem(atPath: box.dir + "/right-0")
 
-    let error = try slotError { _ = try box.ledger().moveSlot(slotA, to: left, name: "A") }
+    let error = try slotError { _ = try box.ledger().moveSlot(slotA, to: left, name: "A", capacity: Int.max) }
 
     try expectEqual(error, .uncertain, "error")
     try expectEqual(try box.files(), [], "no new file")
@@ -167,7 +167,7 @@ let cases: [TestCase] = [
     try box.writeFile("right-0", "\(getppid())\nA\n")
 
     let error = try slotError {
-      _ = try box.ledger().moveSlot(Slot(presence: right, number: 0), to: left, name: "A")
+      _ = try box.ledger().moveSlot(Slot(presence: right, number: 0), to: left, name: "A", capacity: Int.max)
     }
 
     try expectEqual(error, .uncertain, "error")
@@ -179,7 +179,7 @@ let cases: [TestCase] = [
     let before = try box.content("right-0")
     try box.setWritable(false)
 
-    let error = try slotError { _ = try box.ledger().moveSlot(slotA, to: .hidden, name: "A") }
+    let error = try slotError { _ = try box.ledger().moveSlot(slotA, to: .hidden, name: "A", capacity: Int.max) }
 
     try expectEqual(error, .unavailable, "error")
     try expectEqual(try box.files(), ["right-0"], "only the old file, no hidden-*")
@@ -189,10 +189,10 @@ let cases: [TestCase] = [
   TestCase(name: "after a failed creation and the permission restored the move succeeds with a single file") { box in
     let slotA = try takenSlot(box.ledger(), name: "A", presence: right)
     try box.setWritable(false)
-    _ = try slotError { _ = try box.ledger().moveSlot(slotA, to: .hidden, name: "A") }
+    _ = try slotError { _ = try box.ledger().moveSlot(slotA, to: .hidden, name: "A", capacity: Int.max) }
     try box.setWritable(true)
 
-    let moved = try box.ledger().moveSlot(slotA, to: left, name: "A")
+    let moved = try box.ledger().moveSlot(slotA, to: left, name: "A", capacity: Int.max)
 
     try expectEqual(moved, Slot(presence: left, number: 0), "new slot")
     try expectEqual(try box.files(), ["left-0"], "a single file")
@@ -218,7 +218,7 @@ let cases: [TestCase] = [
   TestCase(name: "cleanup removes the file of a dead pid and its slot becomes free again") { box in
     try box.writeFile("right-0", "\(try box.deadPid())\nB\n")
 
-    let slot = try box.ledger().takeSlot(name: "A", presence: right)
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: right, number: 0), "slot")
     try expectEqual(try box.content("right-0"), "\(getpid())\nA\n", "the file is the new one")
@@ -227,7 +227,7 @@ let cases: [TestCase] = [
   TestCase(name: "cleanup leaves the file of another window's live edgeping") { box in
     try plant(box, name: "B", presence: right)
 
-    let slot = try box.ledger().takeSlot(name: "A", presence: right)
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: right, number: 1), "slot")
     try expectEqual(try box.files(), ["right-0", "right-1"], "files")
@@ -237,7 +237,7 @@ let cases: [TestCase] = [
     let foreign = try box.spawnForeign()
     try box.writeFile("right-0", "\(foreign.processIdentifier)\nB\n")
 
-    let slot = try box.ledger().takeSlot(name: "A", presence: right)
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: right, number: 0), "slot")
     try expectEqual(try box.content("right-0"), "\(getpid())\nA\n", "the file is the new one")
@@ -248,7 +248,7 @@ let cases: [TestCase] = [
     let foreign = try box.spawnForeign()
     try box.writeFile("right-0", "\(foreign.processIdentifier)\nalpha\n")
 
-    let slot = try box.ledger().takeSlot(name: "alpha", presence: .side(.right))
+    let slot = try box.ledger().takeSlot(name: "alpha", presence: .side(.right), capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: right, number: 0), "slot")
     try expectEqual(try box.files(), ["right-0"], "files")
@@ -259,13 +259,13 @@ let cases: [TestCase] = [
   TestCase(name: "slot cleanup leaves the outcomes.log log alone") { box in
     try box.writeFile("outcomes.log", "line\n")
 
-    _ = try box.ledger().takeSlot(name: "A", presence: right)
+    _ = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max)
 
     try expectEqual(try box.content("outcomes.log"), "line\n", "log")
   },
 
   TestCase(name: "a missing state folder is created") { box in
-    let slot = try box.ledger().takeSlot(name: "A", presence: left)
+    let slot = try box.ledger().takeSlot(name: "A", presence: left, capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: left, number: 0), "slot")
   },
@@ -274,7 +274,7 @@ let cases: [TestCase] = [
     try FileManager.default.createDirectory(atPath: box.root, withIntermediateDirectories: true)
     try "not a folder".write(toFile: box.dir, atomically: false, encoding: .utf8)
 
-    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right) }
+    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max) }
 
     try expectEqual(error, .unavailable, "error")
   },
@@ -283,7 +283,7 @@ let cases: [TestCase] = [
     try plant(box, name: "B", presence: left)
     try box.setWritable(false)
 
-    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right) }
+    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max) }
 
     try expectEqual(error, .unavailable, "error")
     try expectEqual(try box.files(), ["left-0"], "files")
@@ -293,7 +293,7 @@ let cases: [TestCase] = [
     try box.holdLock(seconds: 5)
     let start = Date()
 
-    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right) }
+    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max) }
 
     let elapsed = Date().timeIntervalSince(start)
     try expectEqual(error, .contended, "error")
@@ -306,7 +306,7 @@ let cases: [TestCase] = [
     let predecessor = try plant(box, name: "A", presence: right)
     try box.holdLock(seconds: 5)
 
-    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: .hidden) }
+    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: .hidden, capacity: Int.max) }
 
     try expectEqual(error, .contended, "error")
     try expectEqual(try box.files(), ["right-0"], "the predecessor's file stays")
@@ -317,7 +317,7 @@ let cases: [TestCase] = [
     let slotA = try takenSlot(box.ledger(), name: "A", presence: right)
     try box.holdLock(seconds: 5)
 
-    let error = try slotError { _ = try box.ledger().moveSlot(slotA, to: left, name: "A") }
+    let error = try slotError { _ = try box.ledger().moveSlot(slotA, to: left, name: "A", capacity: Int.max) }
 
     try expectEqual(error, .contended, "error")
     try expectEqual(try box.files(), ["right-0"], "files")
@@ -334,11 +334,11 @@ let cases: [TestCase] = [
 
   TestCase(name: "when the other process dies the lock can be obtained again") { box in
     try box.holdLock(seconds: 5)
-    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right) }
+    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max) }
     try expectEqual(error, .contended, "error during the contention")
     box.killChildren()
 
-    let slot = try box.ledger().takeSlot(name: "A", presence: right)
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: Int.max)
 
     try expectEqual(slot, Slot(presence: right, number: 0), "slot")
   },

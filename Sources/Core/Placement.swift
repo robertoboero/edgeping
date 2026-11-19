@@ -101,6 +101,8 @@ enum SlotError: Error {
   case unavailable
   /// The own slot file is missing or does not carry the own pid: the reservation is no longer certain.
   case uncertain
+  /// No free number below the side's capacity; hidden slots never count.
+  case full
 }
 
 protocol SpaceProbe {
@@ -111,9 +113,9 @@ protocol SpaceProbe {
 
 protocol SlotLedger {
   /// Always drops the previous alert of the same window; reserves a slot only when the presence is a side.
-  func takeSlot(name: String, presence: Presence) throws -> Slot?
+  func takeSlot(name: String, presence: Presence, capacity: Int) throws -> Slot?
   /// Creates the new slot before removing the old one: if creation fails, the old one stays.
-  func moveSlot(_ slot: Slot, to presence: Presence, name: String) throws -> Slot
+  func moveSlot(_ slot: Slot, to presence: Presence, name: String, capacity: Int) throws -> Slot
   func releaseSlot(_ slot: Slot)
 }
 

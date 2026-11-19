@@ -29,7 +29,7 @@ func slotError(_ body: () throws -> Void, file: String = #fileID, line: UInt = #
 
 /// The slot of a take that must succeed: a `nil` is a failed case, not a runner crash.
 func takenSlot(_ ledger: FileSlots, name: String, presence: Presence, file: String = #fileID, line: UInt = #line) throws -> Slot {
-  guard let slot = try ledger.takeSlot(name: name, presence: presence) else {
+  guard let slot = try ledger.takeSlot(name: name, presence: presence, capacity: Int.max) else {
     throw TestFailure(message: "taking a slot for \(name) should have given a slot, got nil", file: file, line: line)
   }
   return slot
