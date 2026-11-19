@@ -4,14 +4,15 @@
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCES="$SCRIPT_DIR/../bordo"
+CORE="$SCRIPT_DIR/../Sources/Core"
+MACOS="$SCRIPT_DIR/../Sources/MacOS"
 
 # Own directory: any installed binary is never touched.
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/test-edgeping-modes.XXXXXX")" || exit 1
 trap 'rm -rf "$WORK"' EXIT
 BIN="$WORK/edgeping"
 TEST_TMP="$WORK/tmp"
-LOG="$TEST_TMP/edgeping/outcomes.log"
+LOG="$WORK/home/Library/Logs/edgeping/outcomes.log"
 mkdir -p "$TEST_TMP"
 
 PASS=0
@@ -32,7 +33,7 @@ assert_eq() {
 
 echo "=== Test suite: edgeping modes (no sound, no panel) ==="
 
-SWIFT_SOURCES=("$SOURCES"/*.swift)
+SWIFT_SOURCES=("$CORE"/*.swift "$MACOS"/*.swift)
 if ! swiftc -O "${SWIFT_SOURCES[@]}" -o "$BIN" 2>"$WORK/swiftc.err"; then
   cat "$WORK/swiftc.err"
   echo "build failed"
@@ -43,7 +44,7 @@ fi
 # L <stdin> <arguments...>: RC, OUT and ERR of the launch; log and state are reset at every launch.
 L() {
   local input="$1"; shift
-  rm -rf "$TEST_TMP/edgeping"
+  rm -rf "$TEST_TMP/edgeping" "$WORK/home"
   RC=0
   printf '%s' "$input" | TMPDIR="$TEST_TMP" HOME="$WORK/home" "$BIN" "$@" \
     >"$WORK/out" 2>"$WORK/err" || RC=$?

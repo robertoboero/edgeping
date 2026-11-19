@@ -1,6 +1,6 @@
 import Foundation
 
-// Integration suite of FileSlots (bordo/Slots.swift) on the real file system and real processes.
+// Integration suite of FileSlots (Sources/Core/Slots.swift) on the real file system and real processes.
 
 let right = Presence.side(.right)
 let left = Presence.side(.left)
