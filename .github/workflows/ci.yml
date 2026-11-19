@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, macos-26-intel]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Swift version
+        run: swiftc --version
+      - name: Build
+        run: bash scripts/build.sh --out "$RUNNER_TEMP/edgeping"
+      - name: Test
+        run: bash scripts/test.sh
+      - name: Validate JSON files
+        run: |
+          python3 -m json.tool .claude-plugin/plugin.json > /dev/null
+          python3 -m json.tool .claude-plugin/marketplace.json > /dev/null
+          python3 -m json.tool hooks/hooks.json > /dev/null
+      - name: Check the committed program
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: bash scripts/check-dist.sh
