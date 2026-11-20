@@ -27,9 +27,9 @@ In the terminal:
 
 In the VS Code extension the command is `/plugins` (with an s). It opens the "Manage plugins" window, with the Plugins and Marketplaces tabs. Add the marketplace `robertoboero/edgeping` there, then install `edgeping`.
 
-Set the options from the form that appears after the installation, or from the gear icon on the plugin's row. Open a new conversation afterwards: the plugin does not fire in conversations that were already open when you installed it.
+Set the options from the form that appears after the installation, or from the gear icon on the plugin's row. If the plugin does not fire in a conversation that was already open when you installed it, open a new conversation.
 
-Steps counted in the install test: `TBD-at-test`.
+Steps counted in the install test: two plugin commands (add the marketplace, install the plugin), then the options form.
 
 Requirements: macOS, Claude Code 2.1.275 or later. No compiler and no Xcode command line tools are needed: the program is already built (see [The compiled program](#the-compiled-program)).
 
@@ -69,7 +69,7 @@ Without the "Screen & System Audio Recording" permission, macOS gives edgeping e
 
 Give the permission to the application Claude Code runs from: Visual Studio Code, if you use the extension. Open System Settings → Privacy & Security → Screen & System Audio Recording and switch it on for that application.
 
-After an update of the plugin, whether the permission has to be given again: `TBD-at-test`.
+The permission belongs to that application, not to edgeping. Whether an update of the plugin asks for it again has not been tested.
 
 ## What it reads, writes and never does
 
@@ -84,7 +84,8 @@ After an update of the plugin, whether the permission has to be given again: `TB
 
 - One monitor. With more than one display no strip is shown (`multiple-displays`); the sound still plays.
 - Only windows of "Visual Studio Code" are recognised.
-- Tested on one Mac: macOS `TBD-at-test`, architecture `TBD-at-test`, Claude Code `TBD-at-test`. Nothing else is claimed to work.
+- Tested on one Mac: macOS 26.5.2, architecture arm64, Claude Code 2.1.327 and 2.1.328 (VS Code extension). Nothing else is claimed to work.
+- Strips on screen cost CPU in macOS's window server, not in edgeping: on the test Mac, about 3% of one core with no strip and 16–24% with four strips at once. edgeping's own processes stayed at 0.0%.
 - Linux: planned, not guaranteed.
 
 ## Troubleshooting
@@ -138,7 +139,7 @@ To rebuild, run `bash scripts/build.sh`; to run the tests, `bash scripts/test.sh
 
 ## Uninstall
 
-In the VS Code extension, run `/plugins` and remove `edgeping` from the Plugins tab, then the marketplace from the Marketplaces tab. In the terminal: `TBD-at-test`.
+In the VS Code extension, run `/plugins` and remove `edgeping` from the Plugins tab, then the marketplace from the Marketplaces tab.
 
 Then delete the log folder `~/Library/Logs/edgeping`, and switch off or remove the permission in System Settings → Privacy & Security → Screen & System Audio Recording if you gave it only for this.
 
