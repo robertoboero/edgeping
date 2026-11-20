@@ -14,7 +14,8 @@ for f in Sources/Core/*.swift Sources/MacOS/*.swift; do
 done
 
 status=0
-for suite in placement slots hook subagent_state probe; do
+for dir in Tests/*/; do
+  suite="$(basename "$dir")"
   if swiftc "${sources[@]}" Tests/$suite/*.swift -o "$work/$suite" && "$work/$suite" | tail -1; then
     :
   else
