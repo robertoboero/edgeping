@@ -25,7 +25,8 @@ final class FileSlots: SlotLedger {
 
   func takeSlot(name: String, presence: Presence, capacity: Int) throws -> Slot? {
     do {
-      try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+      try FileManager.default.createDirectory(
+        atPath: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     } catch {
       throw SlotError.unavailable
     }
@@ -123,7 +124,9 @@ final class FileSlots: SlotLedger {
   }
 
   private func create(_ slot: Slot, name: String) -> Bool {
-    FileManager.default.createFile(atPath: path(fileName(slot)), contents: Data("\(pid)\n\(name)\n".utf8))
+    FileManager.default.createFile(
+      atPath: path(fileName(slot)), contents: Data("\(pid)\n\(name)\n".utf8),
+      attributes: [.posixPermissions: 0o600])
   }
 
   // A pid reused by another process is no longer a panel: the signal must not reach it.

@@ -2,6 +2,7 @@
 import Foundation
 
 runClassifyTests()
+runStayReadTests()
 runVisitTrackerTests()
 runClosureTrackerTests()
 runMachineClosureTests()

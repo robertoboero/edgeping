@@ -20,6 +20,27 @@ func runClassifyTests() {
   }
 }
 
+func runStayReadTests() {
+  let found = WindowLookup(listReadOK: true, listCount: 3, windowSpaces: [4])
+  let absent = WindowLookup(listReadOK: true, listCount: 3, windowSpaces: nil)
+  let failed = WindowLookup(listReadOK: false, listCount: 0, windowSpaces: nil)
+  let twoDisplays = Spaces(order: [1, 2], current: 1, displayCount: 2)
+  let oneDisplay = Spaces(order: [1, 2], current: 1, displayCount: 1)
+  test("stayRead: with more than one display every window is unreadable") {
+    for lookup in [found, absent, failed] {
+      expectEqual(stayRead(spaces: twoDisplays, lookup: lookup), .unreadable)
+    }
+  }
+  test("stayRead: with one display the read is classify's") {
+    for lookup in [found, absent, failed] {
+      expectEqual(stayRead(spaces: oneDisplay, lookup: lookup), classify(lookup))
+    }
+  }
+  test("stayRead: spaces that could not be read fall back to classify") {
+    expectEqual(stayRead(spaces: nil, lookup: found), classify(found))
+  }
+}
+
 func runVisitTrackerTests() {
   let arrival = 100.0
   test("visit threshold: just below the dwell is not a visit") {
