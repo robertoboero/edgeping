@@ -1,6 +1,6 @@
 # edgeping
 
-A Claude Code plugin for macOS. When a conversation in one VS Code window finishes or asks you something, and you are looking at another window or screen, edgeping plays a sound and shows a colored strip on the edge of the screen, with the name of the project, on the side where that window is.
+A Claude Code plugin for macOS. When a conversation in one VS Code window finishes or asks you something, edgeping always plays a sound. If that window is not on the Space you are looking at, it also shows a colored strip on the edge of the screen, with the name of the project, on the side where that window is.
 
 edgeping is not affiliated with Anthropic.
 
@@ -146,4 +146,4 @@ Then delete the log folder `~/Library/Logs/edgeping`, and switch off or remove t
 
 MIT, see [LICENSE](LICENSE). Security reports: see [SECURITY.md](SECURITY.md).
 
-By Roberto Boero, [codebeans.it](https://codebeans.it).
+By [codebeans.it](https://codebeans.it).
