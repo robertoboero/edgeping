@@ -52,6 +52,8 @@ final class FileSlots: SlotLedger {
       let old = fileName(slot)
       let entries = try readEntries()
       guard entries.contains(where: { $0.file == old && $0.pid == pid }) else { throw SlotError.uncertain }
+      // Same presence: creating the new file then removing the old would delete the only one.
+      if slot.presence == presence { return slot }
       let new = Slot(presence: presence, number: try freeNumber(presence, capacity: capacity, among: entries))
       guard create(new, name: name) else { throw SlotError.unavailable }
       remove(old)

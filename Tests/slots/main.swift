@@ -464,6 +464,27 @@ let cases: [TestCase] = [
     try expectEqual(try box.files(), ["left-0", "right-0"], "files")
     try expectEqual(try box.content("right-0"), before, "the old file is intact")
   },
+
+  TestCase(name: "a move to the side the panel is already on changes nothing") { box in
+    let slotA = try takenSlot(box.ledger(), name: "A", presence: left)
+
+    let moved = try box.ledger().moveSlot(slotA, to: left, name: "A", capacity: Int.max)
+
+    try expectEqual(moved, Slot(presence: left, number: 0), "slot")
+    try expectEqual(try box.files(), ["left-0"], "files")
+  },
+
+  TestCase(name: "capacity: a move to the side the panel is on, with the side full, is not full") { box in
+    for index in 0..<12 { try plant(box, name: "P\(index)", presence: right) }
+    let slotA = try takenSlot(box.ledger(), name: "A", presence: right)
+    let before = try box.files()
+    try expectEqual(slotA, Slot(presence: right, number: 12), "the mover is the last of 13")
+
+    let moved = try box.ledger().moveSlot(slotA, to: right, name: "A", capacity: 13)
+
+    try expectEqual(moved, slotA, "slot")
+    try expectEqual(try box.files(), before, "files")
+  },
 ]
 
 exit(run(cases))
