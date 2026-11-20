@@ -64,11 +64,6 @@ struct Reading {
   let windows: [CodeWindow]
 }
 
-struct Rereading {
-  let spaces: Spaces
-  let windowSpaces: [Int]
-}
-
 struct ChosenWindow: Equatable {
   let window: CodeWindow
   let name: String
@@ -77,12 +72,6 @@ struct ChosenWindow: Equatable {
 struct Slot: Equatable {
   let presence: Presence
   let number: Int
-}
-
-enum Action: Equatable {
-  case moveSlot(Presence)
-  case show(Side)
-  case hide
 }
 
 /// The macOS calls do not answer, or answer in an unexpected shape.
@@ -99,8 +88,8 @@ enum SlotError: Error {
 
 protocol SpaceProbe {
   func read() throws -> Reading
-  /// Spaces, and the spaces of the already recognised window, without matching by title again.
-  func reread(window: Int) throws -> Rereading
+  /// One lookup of the already recognised window; a failing system call is reported in the result, never thrown.
+  func lookup(window: Int) -> (spaces: Spaces?, window: WindowLookup)
 }
 
 protocol SlotLedger {
@@ -166,18 +155,6 @@ func computePresence(_ spaces: Spaces, windowSpaces: [Int]) throws -> Presence {
   return .side(window < current ? .left : .right)
 }
 
-/// Compares the desired presence with the owned slot and the visible panel, never with the last presence.
-func reconcile(desired: Presence, slot: Presence, panel: Side?) -> [Action] {
-  var actions: [Action] = []
-  if slot != desired { actions.append(.moveSlot(desired)) }
-  switch desired {
-  case .side(let side) where panel != side: actions.append(.show(side))
-  case .hidden where panel != nil: actions.append(.hide)
-  default: break
-  }
-  return actions
-}
-
 let visitDwellSeconds: Double = 1.0
 let windowCheckSeconds: Double = 5
 
@@ -200,6 +177,12 @@ func classify(_ lookup: WindowLookup) -> WindowRead {
   guard lookup.listReadOK, lookup.listCount > 0 else { return .unreadable }
   guard let spaces = lookup.windowSpaces else { return .absent }
   return spaces.isEmpty ? .unreadable : .present(spaces)
+}
+
+/// More than one display is never a readable state: the strip is not shown there.
+func stayRead(spaces: Spaces?, lookup: WindowLookup) -> WindowRead {
+  if (spaces?.displayCount ?? 1) > 1 { return .unreadable }
+  return classify(lookup)
 }
 
 /// Raw values are the `via=` field of the outcome log.

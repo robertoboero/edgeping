@@ -157,40 +157,6 @@ expectFailure("window space missing from the order: probe-failed", .probeFailed)
   try presence(current: aSpace, window: [9999])
 }
 
-// MARK: reconciliation
-
-let L = Presence.side(.left), R = Presence.side(.right), H = Presence.hidden
-
-/// One row per combination of desired presence, owned slot and visible panel.
-/// With the right slot and side a closed panel is recreated; a panel already in place gives no actions.
-let reconcileTable: [(desired: Presence, slot: Presence, panel: Side?, expected: [Action])] = [
-  (L, L, nil, [.show(.left)]), (L, L, .left, []), (L, L, .right, [.show(.left)]),
-  (L, R, nil, [.moveSlot(L), .show(.left)]), (L, R, .left, [.moveSlot(L)]), (L, R, .right, [.moveSlot(L), .show(.left)]),
-  (L, H, nil, [.moveSlot(L), .show(.left)]), (L, H, .left, [.moveSlot(L)]), (L, H, .right, [.moveSlot(L), .show(.left)]),
-  (R, R, nil, [.show(.right)]), (R, R, .right, []), (R, R, .left, [.show(.right)]),
-  (R, L, nil, [.moveSlot(R), .show(.right)]), (R, L, .right, [.moveSlot(R)]), (R, L, .left, [.moveSlot(R), .show(.right)]),
-  (R, H, nil, [.moveSlot(R), .show(.right)]), (R, H, .right, [.moveSlot(R)]), (R, H, .left, [.moveSlot(R), .show(.right)]),
-  (H, H, nil, []), (H, H, .left, [.hide]), (H, H, .right, [.hide]),
-  (H, L, nil, [.moveSlot(H)]), (H, L, .left, [.moveSlot(H), .hide]), (H, L, .right, [.moveSlot(H), .hide]),
-  (H, R, nil, [.moveSlot(H)]), (H, R, .left, [.moveSlot(H), .hide]), (H, R, .right, [.moveSlot(H), .hide]),
-]
-
-func label(_ presence: Presence?) -> String {
-  switch presence {
-  case .side(let side)?: return side.rawValue
-  case .hidden?: return "hidden"
-  case nil: return "none"
-  }
-}
-
-report("reconciliation: the table covers the 27 distinct combinations", Set(reconcileTable.map { "\(label($0.desired))/\(label($0.slot))/\(label($0.panel.map(Presence.side)))" }).count == 27, "distinct rows differ from 27")
-
-for row in reconcileTable {
-  let name = "reconciliation desired \(label(row.desired)), slot \(label(row.slot)), panel \(label(row.panel.map(Presence.side)))"
-  expectEqual(name, reconcile(desired: row.desired, slot: row.slot, panel: row.panel), row.expected)
-}
-
-
 // MARK: colors, modes, codes
 
 expectEqual("mode done is the argument \"done\"", Mode(rawValue: "done"), Mode.done)

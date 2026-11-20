@@ -50,10 +50,6 @@ final class CGSProbe: SpaceProbe {
       WindowLookup(listReadOK: true, listCount: list.count, windowSpaces: found ? spacesOf(window) : nil))
   }
 
-  func reread(window: Int) throws -> Rereading {
-    Rereading(spaces: try readSpaces(), windowSpaces: spacesOf(window))
-  }
-
   private func windowList() -> [[String: Any]]? {
     CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
   }

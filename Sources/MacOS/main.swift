@@ -34,7 +34,7 @@ func runHook(mode: Mode) -> Never {
     log.write(.invalidInput)
     exit(0)
   }
-  // Only this mode records rejected options: its children reread the same variables silently.
+  // Only this mode records rejected options: its children read the same variables silently.
   let parsed = parseSettings(environment, sounds: SystemSounds())
   for key in parsed.invalid { log.write(.optionInvalid, cwd: input.cwd, fields: "option=" + key) }
   let settings = parsed.settings
@@ -176,7 +176,7 @@ private let windowCheckToleranceSeconds: TimeInterval = 1
 
 /// State of the alert in the process: the owned slot and the timers; every decision is `StayMachine`'s.
 final class Alert: NSObject {
-  private let probe: CGSProbe
+  private let probe: SpaceProbe
   private let slots: SlotLedger
   private let windowID: Int
   private let name: String
@@ -196,7 +196,7 @@ final class Alert: NSObject {
     onExpiry: { [unowned self] in self.expire() })
 
   init(
-    probe: CGSProbe, slots: SlotLedger, chosen: ChosenWindow, slot: Slot, capacity: Int,
+    probe: SpaceProbe, slots: SlotLedger, chosen: ChosenWindow, slot: Slot, capacity: Int,
     appearance: Appearance, stayUntilVisited: Bool, log: OutcomeLog, cwd: String
   ) {
     self.probe = probe
@@ -236,8 +236,7 @@ final class Alert: NSObject {
   /// Every read is taken now, with the spaces order and the current space of this very moment.
   private func feed(_ event: (WindowRead, Int?, [Int], Double) -> StayEvent) {
     let lookup = probe.lookup(window: windowID)
-    // More than one display is never a readable state: the strip is not shown there.
-    let read = (lookup.spaces?.displayCount ?? 1) > 1 ? WindowRead.unreadable : classify(lookup.window)
+    let read = stayRead(spaces: lookup.spaces, lookup: lookup.window)
     let now = ProcessInfo.processInfo.systemUptime
     apply(machine.handle(event(read, lookup.spaces?.current, lookup.spaces?.order ?? [], now)))
   }

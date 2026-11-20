@@ -189,6 +189,15 @@ assert_eq "0" "$(log_mentions "#123456")" "valid color value is not in the log"
 assert_eq "0" "$(log_mentions "33.25")" "valid duration value is not in the log"
 assert_eq "0" "$(log_mentions "NoSuchSound")" "invalid sound value is not in the log"
 
+# RNF-03: state folders and session files are private to the owner, even under umask 000.
+old_umask=$(umask)
+umask 000
+L '{"session_id":"abc","background_tasks":[{"status":"running","type":"agent"}]}' done
+umask "$old_umask"
+assert_eq "700" "$(stat -f %Lp "$TEST_TMP/edgeping")" "state folder mode is 0700 even under umask 000"
+assert_eq "700" "$(stat -f %Lp "$TEST_TMP/edgeping/subagents")" "subagents folder mode is 0700 even under umask 000"
+assert_eq "600" "$(stat -f %Lp "$TEST_TMP/edgeping/subagents/abc")" "session file mode is 0600 even under umask 000"
+
 echo ""
 echo "PASSED: $PASS FAILED: $FAIL"
 [ "$FAIL" -eq 0 ]

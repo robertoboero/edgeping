@@ -58,6 +58,20 @@ let cases: [TestCase] = [
   hiddenEntryCase("on the right side", right),
   hiddenEntryCase("hidden", .hidden),
 
+  TestCase(name: "the state folder and the slot files are private to the owner, even under umask 000") { box in
+    let previous = umask(0)
+    defer { umask(previous) }
+
+    _ = try takenSlot(box.ledger(), name: "A", presence: right)
+    let slot = try takenSlot(box.ledger(), name: "A", presence: left)
+    _ = try box.ledger().moveSlot(slot, to: right, name: "A", capacity: Int.max)
+
+    try expectEqual(try box.mode(box.dir), 0o700, "state folder mode")
+    let files = try box.files()
+    try expect(!files.isEmpty, "at least one slot file was checked")
+    for file in files { try expectEqual(try box.mode(box.dir + "/" + file), 0o600, "mode of \(file)") }
+  },
+
   TestCase(name: "replacing the predecessor leaves the other windows alone") { box in
     let other = try plant(box, name: "B", presence: left)
     try plant(box, name: "A", presence: right)

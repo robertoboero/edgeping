@@ -62,6 +62,10 @@ final class Sandbox {
     try String(contentsOfFile: dir + "/" + file, encoding: .utf8)
   }
 
+  func mode(_ path: String) throws -> Int {
+    Int(truncating: try FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as! NSNumber) & 0o777
+  }
+
   func writeFile(_ file: String, _ text: String) throws {
     try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
     try text.write(toFile: dir + "/" + file, atomically: false, encoding: .utf8)
