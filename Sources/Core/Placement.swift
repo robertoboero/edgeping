@@ -95,7 +95,8 @@ protocol SpaceProbe {
 protocol SlotLedger {
   /// Always drops the previous alert of the same window; reserves a slot only when the presence is a side.
   func takeSlot(name: String, presence: Presence, capacity: Int) throws -> Slot?
-  /// Creates the new slot before removing the old one: if creation fails, the old one stays.
+  /// Same presence returns the same slot untouched; otherwise creates the new slot before removing the old one,
+  /// so if creation fails the old one stays.
   func moveSlot(_ slot: Slot, to presence: Presence, name: String, capacity: Int) throws -> Slot
   func releaseSlot(_ slot: Slot)
 }
