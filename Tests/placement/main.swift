@@ -238,5 +238,30 @@ report("system blue: declared ratio about 5.2:1", abs(contrastWithBlack(Settings
 expectEqual("done is #D97757", Settings().color(for: .done), RGBColor(red: 0xD9, green: 0x77, blue: 0x57))
 expectEqual("question is #007AFF", Settings().color(for: .question), RGBColor(red: 0x00, green: 0x7A, blue: 0xFF))
 
+// MARK: slot capacity
+
+// Same values as the panel's private constants; the pinned case below fixes the requirement by hand.
+let capacityLabel = 28.0
+let capacityStep = 36.0
+func capacity(_ height: Double) -> Int {
+  slotCapacity(screenHeight: height, labelHeight: capacityLabel, slotStep: capacityStep)
+}
+
+expectEqual("capacity: a 900 pt screen holds 13 slots", slotCapacity(screenHeight: 900, labelHeight: 28, slotStep: 36), 13)
+
+// The 13th slot appears once the 12th step below the centre still has the whole label on screen.
+let thirteenthSlotHeight = capacityLabel + 2 * capacityStep * 12
+expectEqual("capacity: just below the height of the 13th slot gives 12", capacity(thirteenthSlotHeight - 0.1), 12)
+expectEqual("capacity: exactly the height of the 13th slot gives 13", capacity(thirteenthSlotHeight), 13)
+expectEqual("capacity: just above the height of the 13th slot still gives 13", capacity(thirteenthSlotHeight + 0.1), 13)
+
+// A screen as tall as the label holds the centre slot only; a shorter one holds none.
+expectEqual("capacity: a screen just shorter than the label holds none", capacity(capacityLabel - 0.1), 0)
+expectEqual("capacity: a screen exactly as tall as the label holds one", capacity(capacityLabel), 1)
+expectEqual("capacity: a screen just taller than the label still holds one", capacity(capacityLabel + 0.1), 1)
+
+expectEqual("capacity: a zero step holds none", slotCapacity(screenHeight: 900, labelHeight: capacityLabel, slotStep: 0), 0)
+expectEqual("capacity: a negative step holds none", slotCapacity(screenHeight: 900, labelHeight: capacityLabel, slotStep: -36), 0)
+
 print("PASSED: \(passed) FAILED: \(failed)")
 exit(failed == 0 ? 0 : 1)

@@ -342,6 +342,114 @@ let cases: [TestCase] = [
 
     try expectEqual(slot, Slot(presence: right, number: 0), "slot")
   },
+
+  // MARK: capacity of a side
+
+  TestCase(name: "capacity: one below the limit the next free number is still given") { box in
+    try plant(box, name: "B", presence: right)
+
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: 2)
+
+    try expectEqual(slot, Slot(presence: right, number: 1), "slot")
+  },
+
+  TestCase(name: "capacity: a side exactly full gives full") { box in
+    try plant(box, name: "B", presence: right)
+    try plant(box, name: "C", presence: right)
+
+    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right, capacity: 2) }
+
+    try expectEqual(error, .full, "error")
+  },
+
+  TestCase(name: "capacity: a take on a full side creates no file and leaves the panels running") { box in
+    let first = try plant(box, name: "B", presence: right)
+    let second = try plant(box, name: "C", presence: right)
+    let before = try (box.content("right-0"), box.content("right-1"))
+
+    _ = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right, capacity: 2) }
+
+    try expectEqual(try box.files(), ["right-0", "right-1"], "files")
+    try expectEqual(try box.content("right-0"), before.0, "content of right-0")
+    try expectEqual(try box.content("right-1"), before.1, "content of right-1")
+    try expect(first.isRunning && second.isRunning, "the panels on a full side must not be stopped")
+  },
+
+  TestCase(name: "capacity: zero gives full on an empty side") { box in
+    let error = try slotError { _ = try box.ledger().takeSlot(name: "A", presence: right, capacity: 0) }
+
+    try expectEqual(error, .full, "error")
+    try expectEqual(try box.files(), [], "no file")
+  },
+
+  TestCase(name: "capacity: a hole below the limit is used, the first free number counts") { box in
+    try plant(box, name: "B", presence: right)
+    let middle = try box.spawnAlive()
+    let slotC = try takenSlot(box.ledger(pid: middle.processIdentifier), name: "C", presence: right)
+    try plant(box, name: "D", presence: right)
+    box.ledger(pid: middle.processIdentifier).releaseSlot(slotC)
+
+    let slot = try box.ledger().takeSlot(name: "E", presence: right, capacity: 2)
+
+    try expectEqual(slot, Slot(presence: right, number: 1), "slot")
+  },
+
+  TestCase(name: "capacity: hidden slots do not count toward a side") { box in
+    try plant(box, name: "B", presence: .hidden)
+    try plant(box, name: "C", presence: .hidden)
+
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: 1)
+
+    try expectEqual(slot, Slot(presence: right, number: 0), "slot")
+  },
+
+  TestCase(name: "capacity: a hidden take is never full, even with capacity zero") { box in
+    try plant(box, name: "B", presence: .hidden)
+
+    let slot = try box.ledger().takeSlot(name: "A", presence: .hidden, capacity: 0)
+
+    try expect(slot == nil, "no slot for a hidden presence")
+  },
+
+  TestCase(name: "capacity: a move to hidden succeeds with capacity zero and numbers after the hidden ones") { box in
+    try plant(box, name: "B", presence: .hidden)
+    let slotA = try takenSlot(box.ledger(), name: "A", presence: right)
+
+    let moved = try box.ledger().moveSlot(slotA, to: .hidden, name: "A", capacity: 0)
+
+    try expectEqual(moved, Slot(presence: .hidden, number: 1), "new slot")
+    try expectEqual(try box.files(), ["hidden-0", "hidden-1"], "files")
+  },
+
+  TestCase(name: "capacity: the other side's panels do not fill this side") { box in
+    try plant(box, name: "B", presence: left)
+    try plant(box, name: "C", presence: left)
+
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: 2)
+
+    try expectEqual(slot, Slot(presence: right, number: 0), "slot")
+  },
+
+  TestCase(name: "capacity: the predecessor of the same window does not count against the limit") { box in
+    try plant(box, name: "A", presence: right)
+
+    let slot = try box.ledger().takeSlot(name: "A", presence: right, capacity: 1)
+
+    try expectEqual(slot, Slot(presence: right, number: 0), "slot")
+    try expectEqual(try box.files(), ["right-0"], "files")
+  },
+
+  TestCase(name: "capacity: a move to a full side gives full and touches nothing") { box in
+    try plant(box, name: "B", presence: left)
+    let slotA = try takenSlot(box.ledger(), name: "A", presence: right)
+    let before = try box.content("right-0")
+
+    let error = try slotError { _ = try box.ledger().moveSlot(slotA, to: left, name: "A", capacity: 1) }
+
+    try expectEqual(error, .full, "error")
+    try expectEqual(try box.files(), ["left-0", "right-0"], "files")
+    try expectEqual(try box.content("right-0"), before, "the old file is intact")
+  },
 ]
 
 exit(run(cases))
