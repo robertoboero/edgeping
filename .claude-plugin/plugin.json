@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Edge-of-screen strip and sound when a Claude Code conversation in another VS Code window finishes or asks you something. For Claude Code on macOS; not affiliated with Anthropic.",
   "author": {
-    "name": "Roberto Boero",
+    "name": "codebeans.it",
     "email": "it@codebeans.it",
     "url": "https://codebeans.it"
   },
