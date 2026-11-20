@@ -1,0 +1,73 @@
+{
+  "name": "edgeping",
+  "version": "0.1.0",
+  "description": "Edge-of-screen strip and sound when a Claude Code conversation in another VS Code window finishes or asks you something. For Claude Code on macOS; not affiliated with Anthropic.",
+  "author": {
+    "name": "codebeans.it",
+    "email": "it@codebeans.it",
+    "url": "https://codebeans.it"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/robertoboero/edgeping",
+  "homepage": "https://github.com/robertoboero/edgeping",
+  "userConfig": {
+    "sound_enabled": {
+      "type": "boolean",
+      "title": "Sound",
+      "description": "Play a sound when a conversation finishes or asks you something.",
+      "default": true
+    },
+    "strip_enabled": {
+      "type": "boolean",
+      "title": "Edge strip",
+      "description": "Show a strip on the edge of the screen, next to the window of the conversation.",
+      "default": true
+    },
+    "sound_done": {
+      "type": "string",
+      "title": "Sound when done",
+      "description": "Sound played when a conversation finishes.",
+      "default": "Glass",
+      "options": ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"]
+    },
+    "sound_question": {
+      "type": "string",
+      "title": "Sound when asking",
+      "description": "Sound played when a conversation asks you something.",
+      "default": "Ping",
+      "options": ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"]
+    },
+    "color_done": {
+      "type": "string",
+      "title": "Color when done",
+      "description": "Strip color for a finished conversation, as #RRGGBB.",
+      "default": "#D97757"
+    },
+    "color_question": {
+      "type": "string",
+      "title": "Color when asking",
+      "description": "Strip color when a conversation asks you something, as #RRGGBB.",
+      "default": "#007AFF"
+    },
+    "duration_seconds": {
+      "type": "number",
+      "title": "Strip duration (seconds)",
+      "description": "How long the strip stays on screen, from 3 to 60 seconds. Ignored when Stay until visited is on.",
+      "default": 10,
+      "min": 3,
+      "max": 60
+    },
+    "stay_until_visited": {
+      "type": "boolean",
+      "title": "Stay until visited",
+      "description": "When on, the strip stays until you stop on the window's screen for about a second, and the duration is ignored.",
+      "default": false
+    },
+    "label_enabled": {
+      "type": "boolean",
+      "title": "Label",
+      "description": "Show a text label on the strip.",
+      "default": true
+    }
+  }
+}
