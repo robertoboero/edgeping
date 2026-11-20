@@ -22,11 +22,35 @@ let neighbours: [String: String] = [
 ]
 let keys = neighbours.keys.sorted()
 
-/// The settings with the neighbour value of every key except `key`, which keeps its default.
-func neighboursApplied(except key: String) -> Settings {
-  let parsed = parse(neighbours.filter { $0.key != key }).settings
-  return parsed
+/// What the neighbour values must produce, written out by hand and not obtained from parse.
+let allApplied = Settings(
+  soundEnabled: false, stripEnabled: false, soundDone: "Hero", soundQuestion: "Basso",
+  colorDone: RGBColor(red: 0x11, green: 0x22, blue: 0x33), colorQuestion: RGBColor(red: 0x44, green: 0x55, blue: 0x66),
+  durationSeconds: 42, stayUntilVisited: true, labelEnabled: false)
+
+/// `base` with the field of `key` taken from `source`.
+func setting(_ key: String, from source: Settings, into base: Settings) -> Settings {
+  var result = base
+  switch key {
+  case "sound_enabled": result.soundEnabled = source.soundEnabled
+  case "strip_enabled": result.stripEnabled = source.stripEnabled
+  case "sound_done": result.soundDone = source.soundDone
+  case "sound_question": result.soundQuestion = source.soundQuestion
+  case "color_done": result.colorDone = source.colorDone
+  case "color_question": result.colorQuestion = source.colorQuestion
+  case "duration_seconds": result.durationSeconds = source.durationSeconds
+  case "stay_until_visited": result.stayUntilVisited = source.stayUntilVisited
+  case "label_enabled": result.labelEnabled = source.labelEnabled
+  default: fatalError("unknown key \(key)")
+  }
+  return result
 }
+
+/// Every option applied except `key`, which keeps its default.
+func neighboursApplied(except key: String) -> Settings { setting(key, from: defaults, into: allApplied) }
+
+/// Only `key` applied; every other option at its default.
+func onlyApplied(_ key: String) -> Settings { setting(key, from: allApplied, into: defaults) }
 
 // Rows of the options table: a value that is not valid for the key.
 let invalidValue: [String: String] = [
@@ -54,9 +78,12 @@ for key in keys {
   expectEqual("\(key): invalid is reported once, by key only", bad.invalid, [key])
   expectEqual("\(key): invalid keeps the default and the other options applied", bad.settings, expectedOthers)
 
-  let good = parse(neighbours)
+  let good = parse([key: neighbours[key]!])
   expectEqual("\(key): valid is not reported", good.invalid, [])
+  expectEqual("\(key): valid is applied and nothing else changes", good.settings, onlyApplied(key))
 }
+
+expectEqual("every valid option together is applied and none is reported", parse(neighbours), ParsedSettings(settings: allApplied, invalid: []))
 
 expectEqual("no options gives the defaults", parse([:]).settings, defaults)
 expectEqual("an unknown key with the prefix is ignored", parseSettings([Settings.optionPrefix + "NO_SUCH": "x"], sounds: knownSounds),
